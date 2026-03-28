@@ -2621,5 +2621,516 @@ function showLegal(tab){
   }
 })();
 </script>
+  <script>
+// ================================================================
+// SUPABASE TAM ENTEGRASYON — Tüm fonksiyonları override eder
+// ================================================================
+
+// ---- FOTOĞRAF YÜKLEME ----
+async function _uploadPhoto(b64, reqId, i, type) {
+  try {
+    const [hdr, data] = b64.split(',');
+    const mime = (hdr.split(';')[0].split(':')[1]) || 'image/jpeg';
+    const bytes = atob(data);
+    const buf = new Uint8Array(bytes.length);
+    for (let j = 0; j < bytes.length; j++) buf[j] = bytes.charCodeAt(j);
+    const blob = new Blob([buf], {type: mime});
+    const ext = mime.split('/')[1] || 'jpg';
+    const path = `${reqId}/${type}_${i}.${ext}`;
+    const {error} = await _sb.storage.from('photos').upload(path, blob, {upsert: true, contentType: mime});
+    if (error) throw error;
+    return _sb.storage.from('photos').getPublicUrl(path).data.publicUrl;
+  } catch(e) {
+    console.warn('Foto yükleme hatası, base64 kullanılıyor:', e.message);
+    return b64; // fallback
+  }
+}
+
+// ---- YARDIMCI ----
+function _safeJSON(s, fb = []) {
+  try { return JSON.parse(s || '[]'); } catch(e) { return fb; }
+}
+
+function _mapRow(r) {
+  return {
+    id: r.id, userEmail: r.user_email, userId: r.user_email,
+    brand: r.brand || '', category: r.category || '',
+    condition: r.condition || '', condLabel: r.cond_label || '',
+    price: r.price || '', listingUrl: r.listing_url || '',
+    description: r.description || '', status: r.status || 'pending',
+    verdict: r.verdict || '', report: r.report || '',
+    date: r.date || '', sentAt: r.sent_at || '',
+    photos: _safeJSON(r.photos_json),
+    tagPhotos: _safeJSON(r.tag_photos_json)
+  };
+}
+
+// ---- KULLANICI FONKSİYONLARI ----
+async function _dbGetUser(email) {
+  const {data} = await _sb.from('users').select('*').eq('email', email).maybeSingle();
+  if (!data) return null;
+  return {email: data.email, pwd: data.pwd, credits: data.credits ?? 0,
+          analyses: data.analyses ?? 0, joinDate: data.join_date || ''};
+}
+
+async function _dbUpsertUser(u) {
+  const {error} = await _sb.from('users').upsert(
+    {email: u.email, pwd: u.pwd, credits: u.credits ?? 0,
+     analyses: u.analyses ?? 0, join_date: u.joinDate || ''},
+    {onConflict: 'email'}
+  );
+  if (error) throw error;
+}
+
+async function _dbLoadAllUsers() {
+  const {data, error} = await _sb.from('users').select('*').order('created_at', {ascending: false});
+  if (error) throw error;
+  return (data || []).map(u => ({
+    email: u.email, pwd: u.pwd, credits: u.credits ?? 0,
+    analyses: u.analyses ?? 0, joinDate: u.join_date || ''
+  }));
+}
+
+async function _dbChangeCredits(email, delta = 1) {
+  const u = await _dbGetUser(email);
+  if (!u) throw new Error('Kullanıcı bulunamadı');
+  const newCr = Math.max(0, u.credits + delta);
+  const {error} = await _sb.from('users').update({credits: newCr}).eq('email', email);
+  if (error) throw error;
+  return newCr;
+}
+
+// ---- TALEPLERİ KAYDET ----
+async function _dbSaveRequest(req) {
+  const photoUrls = [], tagUrls = [];
+  if (req.photos?.length)
+    for (let i = 0; i < req.photos.length; i++)
+      photoUrls.push(await _uploadPhoto(req.photos[i], req.id, i, 'main'));
+  if (req.tagPhotos?.length)
+    for (let i = 0; i < req.tagPhotos.length; i++)
+      tagUrls.push(await _uploadPhoto(req.tagPhotos[i], req.id, i, 'tag'));
+
+  const {error} = await _sb.from('requests').upsert({
+    id: req.id, user_email: req.userEmail,
+    brand: req.brand || '', category: req.category || '',
+    condition: req.condition || '', cond_label: req.condLabel || '',
+    price: req.price || '', listing_url: req.listingUrl || '',
+    description: req.description || '', status: req.status || 'pending',
+    verdict: req.verdict || '', report: req.report || '',
+    date: req.date || '', sent_at: req.sentAt || '',
+    photos_json: JSON.stringify(photoUrls),
+    tag_photos_json: JSON.stringify(tagUrls)
+  }, {onConflict: 'id'});
+  if (error) throw error;
+  return {photoUrls, tagUrls};
+}
+
+async function _dbUpdateReq(id, updates) {
+  const {error} = await _sb.from('requests').update(updates).eq('id', id);
+  if (error) throw error;
+}
+
+async function _dbLoadAllReqs() {
+  const {data, error} = await _sb.from('requests').select('*').order('created_at', {ascending: false});
+  if (error) throw error;
+  return (data || []).map(_mapRow);
+}
+
+async function _dbLoadUserReqs(email) {
+  const {data, error} = await _sb.from('requests').select('*')
+    .eq('user_email', email).order('created_at', {ascending: false});
+  if (error) throw error;
+  return (data || []).map(_mapRow);
+}
+
+// ================================================================
+// OVERRIDE: handleAuth
+// ================================================================
+async function handleAuth() {
+  const email = document.getElementById('me').value.trim();
+  const pwd = document.getElementById('mp').value;
+  const isL = document.getElementById('tl').className.includes('on');
+
+  document.getElementById('merr').style.display = 'none';
+  if (!email || !email.includes('@')) { showErr('Email invalide.'); return; }
+  if (pwd.length < 6) { showErr('Mot de passe trop court (6 car. min).'); return; }
+
+  const msub = document.getElementById('msub');
+  if (msub) { msub.textContent = '⏳ Chargement...'; msub.disabled = true; }
+
+  try {
+    if (!isL) {
+      if (pwd !== document.getElementById('mp2').value) { showErr('Les mots de passe ne correspondent pas.'); return; }
+      if (!document.getElementById('cgu').checked) { showErr('Veuillez accepter les CGU.'); return; }
+      const ex = await _dbGetUser(email);
+      if (ex) { showErr('Email deja utilise.'); return; }
+      const newU = {email, pwd, credits: 2, analyses: 0, joinDate: new Date().toLocaleDateString('fr-FR')};
+      await _dbUpsertUser(newU);
+      curUser = newU;
+    } else {
+      const u = await _dbGetUser(email);
+      if (!u || u.pwd !== pwd) { showErr('Email ou mot de passe incorrect.'); return; }
+      curUser = u;
+    }
+
+    _SESSION.set(curUser);
+    localStorage.setItem('aq_cu', JSON.stringify(curUser));
+    users = await _dbLoadAllUsers();
+    localStorage.setItem('aq_u', JSON.stringify(users));
+
+    const ok = document.getElementById('mok');
+    ok.textContent = isL ? 'Connexion reussie !' : 'Compte cree ! 2 analyses offertes !';
+    ok.style.display = 'block';
+
+    setTimeout(() => {
+      closeM();
+      updateNav();
+      goPage('dash');
+    }, 700);
+
+  } catch(e) {
+    console.error('handleAuth error:', e);
+    showErr('Erreur serveur: ' + e.message);
+  } finally {
+    if (msub) { msub.textContent = isL ? 'Me connecter' : 'Creer mon compte'; msub.disabled = false; }
+  }
+}
+
+// ================================================================
+// OVERRIDE: submitForm
+// ================================================================
+async function submitForm() {
+  let _sess = _SESSION.get();
+  if (_sess && !curUser) curUser = _sess;
+  if (!curUser) { try { curUser = JSON.parse(localStorage.getItem('aq_cu') || 'null'); } catch(e) {} }
+  if (!curUser) { openM('register'); return; }
+
+  try {
+    const fresh = await _dbGetUser(curUser.email);
+    if (fresh) { curUser = fresh; _SESSION.set(fresh); }
+  } catch(e) {}
+
+  if (!curUser.credits || curUser.credits <= 0) {
+    document.getElementById('no-credit-modal').style.display = 'flex';
+    return;
+  }
+
+  const btn = document.getElementById('btn-submit');
+  if (btn) { btn.textContent = '⏳ Envoi des photos...'; btn.disabled = true; }
+
+  const id = 'AQ-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+  const req = {
+    id, userId: curUser.email, userEmail: curUser.email,
+    brand: document.getElementById('brand').value || '',
+    category: document.getElementById('cat').value || '',
+    condition: cond, condLabel: condLabels[cond] || cond,
+    price: document.getElementById('price').value || '',
+    listingUrl: document.getElementById('lurl').value || '',
+    description: (document.getElementById('desc') ? document.getElementById('desc').value : '') || '',
+    photos: photos.slice(), tagPhotos: tagPh.slice(),
+    status: 'pending', verdict: '', report: '',
+    date: new Date().toLocaleDateString('fr-FR'), sentAt: null
+  };
+
+  try {
+    if (btn) btn.textContent = '⏳ Sauvegarde...';
+    await _dbSaveRequest(req);
+    await _sb.from('users').update({
+      credits: curUser.credits - 1,
+      analyses: (curUser.analyses || 0) + 1
+    }).eq('email', curUser.email);
+
+    curUser.credits = Math.max(0, curUser.credits - 1);
+    curUser.analyses = (curUser.analyses || 0) + 1;
+    _SESSION.set(curUser);
+    localStorage.setItem('aq_cu', JSON.stringify(curUser));
+    reqs.unshift(req);
+  } catch(e) {
+    console.error('submitForm Supabase error:', e);
+    reqs.unshift(req);
+    const u = users.find(x => x.email === curUser.email);
+    if (u) { u.analyses = (u.analyses || 0) + 1; u.credits = Math.max(0, (u.credits || 1) - 1); }
+  }
+
+  if (btn) { btn.textContent = '🔍 Analyser mon article'; btn.disabled = false; }
+
+  ['pg-home','pg-dash','pg-admin','pg-about','pg-tarifs','pg-faq'].forEach(pid => {
+    const pe = document.getElementById(pid); if (pe) pe.style.display = 'none';
+  });
+  const faqEl = document.getElementById('faq'); if (faqEl) faqEl.style.display = 'none';
+  const footer = document.querySelector('footer'); if (footer) footer.style.display = 'none';
+  const sucSec = document.getElementById('suc-section');
+  if (sucSec) sucSec.style.display = 'flex';
+  document.getElementById('tnum').textContent = id;
+  document.getElementById('suc-email').textContent = curUser.email;
+  window.scrollTo({top: 0, behavior: 'smooth'});
+  updateNavCredits();
+  renderDash();
+}
+
+// ================================================================
+// OVERRIDE: save
+// ================================================================
+async function save() {
+  try {
+    localStorage.setItem('aq_u', JSON.stringify(users));
+    localStorage.setItem('aq_cu', JSON.stringify(curUser));
+    window._aqCU = curUser;
+    window._aqU = users;
+    if (curUser) {
+      const u = users.find(x => x.email === curUser.email) || curUser;
+      _dbUpsertUser(u).catch(e => console.warn('save user warn:', e.message));
+    }
+  } catch(e) { console.error('save error:', e); }
+}
+
+// ================================================================
+// OVERRIDE: renderAll (Admin paneli — TÜM VERİLER)
+// ================================================================
+async function renderAll() {
+  try {
+    [reqs, users] = await Promise.all([_dbLoadAllReqs(), _dbLoadAllUsers()]);
+    localStorage.setItem('aq_u', JSON.stringify(users));
+  } catch(e) {
+    console.error('renderAll Supabase error:', e);
+    try { reqs = _loadReqs(); users = JSON.parse(localStorage.getItem('aq_u') || '[]'); } catch(e2) {}
+  }
+  renderAdmin();
+  renderUsers();
+  renderStats();
+  updateCounts();
+}
+
+// ================================================================
+// OVERRIDE: renderDash (Kullanıcı dashboard)
+// ================================================================
+async function renderDash() {
+  try {
+    if (!curUser) { const s = _SESSION.get(); if (s) curUser = s; }
+    if (!curUser) { try { curUser = JSON.parse(localStorage.getItem('aq_cu') || 'null'); } catch(e) {} }
+    if (!curUser) {
+      const tb = document.getElementById('dtbody'); if (tb) tb.innerHTML = '';
+      const em = document.getElementById('dempty'); if (em) em.style.display = 'block';
+      return;
+    }
+
+    const [fresh, myR] = await Promise.all([
+      _dbGetUser(curUser.email),
+      _dbLoadUserReqs(curUser.email)
+    ]);
+
+    if (fresh) { curUser = fresh; _SESSION.set(fresh); localStorage.setItem('aq_cu', JSON.stringify(fresh)); }
+
+    const dcredits = document.getElementById('dcredits');
+    if (dcredits) dcredits.textContent = (curUser.credits || 0) + ' crédit(s) restant(s)';
+    updateNavCredits();
+
+    const notice = document.getElementById('dash-email-notice');
+    const emailDisp = document.getElementById('dash-email-display');
+    if (notice && emailDisp) {
+      notice.style.display = myR.length > 0 ? 'block' : 'none';
+      emailDisp.textContent = curUser.email;
+    }
+
+    const tb = document.getElementById('dtbody');
+    const em = document.getElementById('dempty');
+    if (!tb) return;
+    if (!myR.length) { tb.innerHTML = ''; if (em) em.style.display = 'block'; return; }
+    if (em) em.style.display = 'none';
+
+    const smap = {
+      pending: '<span class="badge bpend">EN ATTENTE</span>',
+      sent_authentic: '<span class="badge bok">AUTHENTIQUE</span>',
+      sent_counterfeit: '<span class="badge berr">CONTREFACON</span>',
+      sent_inconclusive: '<span class="badge bpend">INCONCLUSIF</span>'
+    };
+
+    tb.innerHTML = myR.map(r => {
+      const ph = r.photos && r.photos[0]
+        ? `<img src="${r.photos[0]}" style="width:100%;height:100%;object-fit:cover">`
+        : '?';
+      return `<tr>
+        <td><div style="display:flex;align-items:center;gap:.75rem">
+          <div style="width:40px;height:32px;border-radius:6px;background:var(--g1);border:1px solid var(--b1);display:flex;align-items:center;justify-content:center;overflow:hidden">${ph}</div>
+          <div><div style="font-weight:600;color:var(--t1)">${r.category||'Article'}</div>
+          <div style="font-size:.7rem;color:var(--t3)">${r.condLabel}</div></div></div></td>
+        <td style="color:var(--t1);font-weight:600">${r.brand}</td>
+        <td style="font-size:.76rem">${r.date}</td>
+        <td style="color:var(--neon);font-size:.78rem">${r.price?r.price+' €':'-'}</td>
+        <td>${smap[r.status]||smap['pending']}</td>
+        <td style="font-size:.72rem;color:var(--t3)">${r.id}</td>
+      </tr>`;
+    }).join('');
+
+  } catch(e) { console.error('renderDash error:', e); }
+}
+
+// ================================================================
+// OVERRIDE: renderUsers (Admin — kredi yönetimi dahil)
+// ================================================================
+async function renderUsers() {
+  try {
+    users = await _dbLoadAllUsers();
+    localStorage.setItem('aq_u', JSON.stringify(users));
+  } catch(e) {
+    console.error('renderUsers error:', e);
+    try { users = JSON.parse(localStorage.getItem('aq_u') || '[]'); } catch(e2) {}
+  }
+
+  const tb = document.getElementById('utbody');
+  const em = document.getElementById('uempty');
+  if (!tb) return;
+  if (!users.length) { tb.innerHTML = ''; if (em) em.style.display = 'block'; return; }
+  if (em) em.style.display = 'none';
+
+  tb.innerHTML = users.map(u => `
+    <tr>
+      <td style="color:var(--t1);font-weight:600">${u.email}</td>
+      <td style="font-size:.76rem">${u.joinDate || '-'}</td>
+      <td style="color:var(--neon);font-weight:700">${u.analyses || 0}</td>
+      <td>
+        <span class="badge binfo" style="font-size:.7rem;padding:.4rem .9rem">
+          ${u.credits || 0} crédit(s)
+        </span>
+      </td>
+      <td>
+        <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
+          <button class="bsm bsmg" onclick="_adminCredit('${u.email}', 1)" title="+1 crédit">+1</button>
+          <button class="bsm bsmg" onclick="_adminCredit('${u.email}', 5)" title="+5 crédits">+5</button>
+          <button class="bsm bsmg" onclick="_adminCredit('${u.email}', 10)" title="+10 crédits">+10</button>
+          <button class="bsm" onclick="_adminCredit('${u.email}', -1)"
+            style="background:rgba(255,51,102,.1);border:1px solid rgba(255,51,102,.3);color:var(--err)"
+            title="-1 crédit">-1</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// Kredi ekleme/çıkarma (admin)
+async function _adminCredit(email, delta) {
+  try {
+    const newCr = await _dbChangeCredits(email, delta);
+    showToast(`✅ ${email} → ${newCr} crédit(s)`);
+    renderUsers();
+    if (curUser && curUser.email === email) {
+      const fresh = await _dbGetUser(email);
+      if (fresh) { curUser = fresh; _SESSION.set(fresh); updateNavCredits(); }
+    }
+  } catch(e) {
+    showToast('❌ Erreur: ' + e.message);
+  }
+}
+
+// ================================================================
+// OVERRIDE: sendReport (Raporu Supabase'e kaydet + Gmail aç)
+// ================================================================
+async function sendReport() {
+  if (!curDetId) return;
+  if (!curVerdict) { showToast('Selectionnez un verdict.'); return; }
+  const rptEl = document.getElementById('detrpt');
+  const rpt = rptEl ? rptEl.value.trim() : '';
+  if (!rpt) { showToast("Redigez un rapport avant d'envoyer."); return; }
+
+  const sendBtn = document.getElementById('send-report-btn');
+  if (sendBtn) { sendBtn.textContent = '⏳ Sauvegarde...'; sendBtn.disabled = true; }
+
+  const statusMap = {authentic:'sent_authentic', counterfeit:'sent_counterfeit', inconclusive:'sent_inconclusive'};
+
+  try {
+    const newStatus = statusMap[curVerdict] || 'sent_' + curVerdict;
+    const now = new Date().toISOString();
+
+    await _dbUpdateReq(curDetId, {
+      verdict: curVerdict, report: rpt,
+      status: newStatus, sent_at: now
+    });
+
+    // Local array güncelle
+    const idx = reqs.findIndex(x => x.id === curDetId);
+    if (idx >= 0) {
+      reqs[idx].verdict = curVerdict;
+      reqs[idx].report = rpt;
+      reqs[idx].status = newStatus;
+      reqs[idx].sentAt = now;
+    }
+
+    // Gmail aç
+    const r = reqs.find(x => x.id === curDetId);
+    if (r) {
+      const vLabels = {authentic:'AUTHENTIQUE', counterfeit:'CONTREFACON', inconclusive:'INCONCLUSIF'};
+      const subject = `[AUTHENTIQ] Resultat analyse ${r.id} - ${r.brand}`;
+      const body = `Bonjour,\n\nVotre analyse AUTHENTIQ a ete traitee.\n\nNumero : ${r.id}\nMarque : ${r.brand}\nVerdict : ${vLabels[curVerdict]}\n\nRapport :\n${rpt}\n\nLien annonce : ${r.listingUrl}\n\nL'equipe AUTHENTIQ`;
+      const gmailUrl = 'https://mail.google.com/mail/?view=cm&to=' + encodeURIComponent(r.userEmail) +
+        '&su=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body) +
+        '&authuser=' + encodeURIComponent('Onyxstudio.fr@gmail.com');
+      window.open(gmailUrl, '_blank');
+    }
+
+    document.getElementById('detok').style.display = 'block';
+    showToast('✅ Sauvegardé dans Supabase + Gmail ouvert !');
+    renderAll();
+
+  } catch(e) {
+    console.error('sendReport error:', e);
+    showToast('❌ Erreur: ' + e.message);
+  } finally {
+    if (sendBtn) { sendBtn.textContent = '📧 Envoyer par email'; sendBtn.disabled = false; }
+  }
+}
+
+// ================================================================
+// OVERRIDE: updateNavCredits
+// ================================================================
+async function updateNavCredits() {
+  const badge = document.getElementById('nav-credits-badge');
+  const num = document.getElementById('nav-credits-num');
+  const dot = document.getElementById('nav-credits-dot');
+  if (!badge || !num) return;
+  if (!curUser) { badge.style.display = 'none'; return; }
+
+  try {
+    const fresh = await _dbGetUser(curUser.email);
+    if (fresh) { curUser = fresh; _SESSION.set(fresh); }
+  } catch(e) {}
+
+  const cr = curUser ? (curUser.credits || 0) : 0;
+  badge.style.display = 'flex';
+  num.textContent = cr;
+
+  if (cr <= 0) {
+    badge.style.cssText = 'display:flex;align-items:center;gap:.4rem;background:rgba(255,51,102,.1);border:1px solid rgba(255,51,102,.35);border-radius:100px;padding:.35rem .85rem;cursor:pointer';
+    num.style.color = 'var(--err)';
+    if (dot) { dot.style.background = 'var(--err)'; dot.style.boxShadow = '0 0 8px var(--err)'; }
+    document.querySelectorAll('#nav-credits-badge span').forEach(s => s.style.color = 'var(--err)');
+  } else {
+    badge.style.cssText = 'display:flex;align-items:center;gap:.4rem;background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.35);border-radius:100px;padding:.35rem .85rem;cursor:pointer';
+    num.style.color = 'var(--ok)';
+    if (dot) { dot.style.background = 'var(--ok)'; dot.style.boxShadow = '0 0 8px var(--ok)'; }
+    document.querySelectorAll('#nav-credits-badge span').forEach(s => s.style.color = 'var(--ok)');
+  }
+}
+
+// ================================================================
+// SAYFA YÜKLENINCE — Oturumu Supabase'den yenile
+// ================================================================
+(async function _initSupabaseSession() {
+  try {
+    const s = _SESSION.get();
+    if (!s) return;
+    const fresh = await _dbGetUser(s.email);
+    if (fresh) {
+      curUser = fresh;
+      _SESSION.set(fresh);
+      localStorage.setItem('aq_cu', JSON.stringify(fresh));
+      updateNavCredits();
+    }
+  } catch(e) {
+    console.warn('Session init warn:', e.message);
+  }
+})();
+
+console.log('✅ Supabase entegrasyonu yüklendi');
+</script>
 </body>
 </html>
