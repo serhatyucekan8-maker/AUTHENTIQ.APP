@@ -21,6 +21,13 @@
   }
 })();
 </script>
+  <!-- SUPABASE SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const _SB_URL = 'https://BURAYA_PROJE_URL.supabase.co';  // DEĞİŞTİR
+  const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // DEĞİŞTİR (anon key)
+  const _sb = supabase.createClient(_SB_URL, _SB_KEY);
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800;900&family=Syne:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#050810;--bg2:#0a0f1e;--card:#0d1529;--neon:#00d4ff;--neon2:#0099cc;--g1:rgba(0,212,255,.15);--g2:rgba(0,212,255,.4);--g3:rgba(0,212,255,.6);--t1:#e8f4ff;--t2:#7fa8c8;--t3:#3a5570;--b1:rgba(0,212,255,.1);--b2:rgba(0,212,255,.5);--ok:#00ff88;--ok2:rgba(0,255,136,.1);--err:#ff3366;--err2:rgba(255,51,102,.1);--warn:#ffaa00;--warn2:rgba(255,170,0,.1);--glass:rgba(13,21,41,.85)}
