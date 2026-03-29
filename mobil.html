@@ -2819,7 +2819,7 @@ async function submitForm() {
   let _sess = _SESSION.get();
   if (_sess && !curUser) curUser = _sess;
   if (!curUser) { try { curUser = JSON.parse(localStorage.getItem('aq_cu') || 'null'); } catch(e) {} }
-  if (!curUser) { openM('register'); return; }
+ if (!curUser) { openM('register'); return; }
 
   try {
     const fresh = await _dbGetUser(curUser.email);
