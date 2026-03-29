@@ -2824,7 +2824,7 @@ async function submitForm() {
   let _sess = _SESSION.get();
   if (_sess && !curUser) curUser = _sess;
   if (!curUser) { try { curUser = JSON.parse(localStorage.getItem('aq_cu') || 'null'); } catch(e) {} }
- if (!curUser) { openM('register'); return; }
+ if (!curUser) { window._pendingSubmit = true; openM('register'); return; }
 
   try {
     const fresh = await _dbGetUser(curUser.email);
@@ -2880,8 +2880,8 @@ async function submitForm() {
   });
   const faqEl = document.getElementById('faq'); if (faqEl) faqEl.style.display = 'none';
   const footer = document.querySelector('footer'); if (footer) footer.style.display = 'none';
-  const sucSec = document.getElementById('suc-section');
-  if (sucSec) sucSec.style.display = 'flex';
+  document.getElementById('fcard').style.display = 'none';
+  document.getElementById('suc').style.display = 'block';;
   document.getElementById('tnum').textContent = id;
   document.getElementById('suc-email').textContent = curUser.email;
   window.scrollTo({top: 0, behavior: 'smooth'});
