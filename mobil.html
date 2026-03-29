@@ -2801,7 +2801,12 @@ async function handleAuth() {
     setTimeout(() => {
   closeM();
   updateNav();
+  if (window._pendingSubmit) {
+  window._pendingSubmit = false;
+  await submitForm();
+} else {
   goPage('dash');
+}
 }, 700);
 
   } catch(e) {
