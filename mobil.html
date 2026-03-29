@@ -2798,7 +2798,7 @@ async function handleAuth() {
     ok.textContent = isL ? 'Connexion reussie !' : 'Compte cree ! 2 analyses offertes !';
     ok.style.display = 'block';
 
-    setTimeout(() => {
+    setTimeout(async () => {
   closeM();
   updateNav();
   if (window._pendingSubmit) {
