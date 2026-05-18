@@ -1,0 +1,97 @@
+# robots.txt — authentiq.website
+# Service d'authentification d'articles de luxe
+ 
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /*?ref=
+Crawl-delay: 1
+ 
+# --- Moteurs de recherche principaux ---
+User-agent: Googlebot
+Allow: /
+ 
+User-agent: Googlebot-Image
+Allow: /
+ 
+User-agent: Bingbot
+Allow: /
+ 
+User-agent: DuckDuckBot
+Allow: /
+ 
+User-agent: YandexBot
+Allow: /
+ 
+User-agent: Slurp
+Allow: /
+ 
+# --- Crawlers IA (autorisés explicitement pour visibilité GEO) ---
+User-agent: GPTBot
+Allow: /
+ 
+User-agent: OAI-SearchBot
+Allow: /
+ 
+User-agent: ChatGPT-User
+Allow: /
+ 
+User-agent: ClaudeBot
+Allow: /
+ 
+User-agent: Claude-SearchBot
+Allow: /
+ 
+User-agent: Claude-Web
+Allow: /
+ 
+User-agent: anthropic-ai
+Allow: /
+ 
+User-agent: PerplexityBot
+Allow: /
+ 
+User-agent: Perplexity-User
+Allow: /
+ 
+User-agent: Google-Extended
+Allow: /
+ 
+User-agent: Applebot
+Allow: /
+ 
+User-agent: Applebot-Extended
+Allow: /
+ 
+User-agent: Meta-ExternalAgent
+Allow: /
+ 
+User-agent: Bytespider
+Allow: /
+ 
+User-agent: Amazonbot
+Allow: /
+ 
+User-agent: cohere-ai
+Allow: /
+ 
+User-agent: YouBot
+Allow: /
+ 
+# --- Bots agressifs et scrapers indésirables ---
+User-agent: SemrushBot
+Disallow: /
+ 
+User-agent: AhrefsBot
+Disallow: /
+ 
+User-agent: MJ12bot
+Disallow: /
+ 
+User-agent: DotBot
+Disallow: /
+ 
+# --- Sitemaps ---
+Sitemap: https://authentiq.website/sitemap.xml
+ 
