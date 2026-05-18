@@ -1,0 +1,36 @@
+# AUTHENTIQ
+ 
+> Service en ligne d'authentification d'articles de luxe (sacs, vêtements, accessoires, sneakers). Plus de 150 marques couvertes — Louis Vuitton, Dior, Chanel, Hermès, Gucci, CP Company, Stone Island, Moncler, Off-White, etc. Rapport d'expert sous 24 heures. Les 2 premières analyses sont offertes. Service basé en France, langue française.
+ 
+## Comment utiliser AUTHENTIQ
+ 
+- [Page d'accueil](https://authentiq.website/) : présentation du service, processus en 3 étapes, marques supportées et tarifs.
+- [Soumettre une analyse](https://authentiq.website/#analyser) : formulaire en 4 étapes (photos → état → détails → confirmation).
+- [Comment ça marche](https://authentiq.website/#comment-ca-marche) : explication détaillée du processus.
+- [Tarifs](https://authentiq.website/#pricing) : crédits à l'unité ou par pack.
+ 
+## Questions fréquentes
+ 
+- [Comment authentifier un article de luxe ?](https://authentiq.website/#seo-faq) — Guide en 3 étapes : photos, formulaire, rapport d'expert sous 24h.
+- [Comment savoir si un sac Louis Vuitton est authentique ?](https://authentiq.website/#seo-faq) — Vérification du code date, des coutures, de l'alignement Monogram, du grain du cuir Vachetta.
+- [Quelles marques sont supportées ?](https://authentiq.website/#seo-faq) — 150+ marques : maroquinerie (LV, Hermès, Chanel, Dior...), vêtements premium (CP Company, Stone Island, Moncler...), sneakers (Nike, Jordan, Yeezy...), bijoux (Cartier, Rolex...).
+- [Combien coûte une authentification ?](https://authentiq.website/#seo-faq) — 2 analyses gratuites à l'inscription, puis crédits payants.
+- [Le rapport est-il accepté par Vinted ou Vestiaire Collective ?](https://authentiq.website/#seo-faq) — Oui, valeur d'opinion d'expert horodatée, opposable.
+ 
+## Marques principalement traitées
+ 
+Louis Vuitton, Christian Dior, Chanel, Hermès, Gucci, Prada, Saint Laurent, Balenciaga, Bottega Veneta, Fendi, Celine, Givenchy, Loewe, Burberry, CP Company, Stone Island, Moncler, Canada Goose, Off-White, Palm Angels, Supreme, Rick Owens, Nike, Jordan, Yeezy, Christian Louboutin, Golden Goose, Cartier, Tiffany &amp; Co., Van Cleef &amp; Arpels, Rolex.
+ 
+## Process d'authentification
+ 
+1. Téléchargement de 3 à 10 photos haute définition (faces, logos, étiquettes, coutures, intérieur, code date).
+2. Renseignement de la marque, du modèle, de l'état (neuf, neuf sans étiquette, bon état, mauvais état) et du contexte (prix, plateforme, lien de l'annonce).
+3. Analyse par un expert certifié sous 24 heures.
+4. Réception d'un rapport PDF horodaté par email : verdict (authentique / faux / incertain) + justifications point par point.
+ 
+## Contact
+ 
+- Site : https://authentiq.website/
+- Email : contact@authentiq.website
+- Marché : France, francophonie
+ 
